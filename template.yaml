@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  a chatbot using Amazon Nove Micro to help urban wildlife alliance users
+
+Resources:
+  ChatbotApiFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: chatbot_api/
+      Handler: app.lambda_handler
+      Runtime: python3.14
+      Architectures:
+        - x86_64
+      Events:
+        HealthEndpoint:
+          Type: Api
+          Properties:
+            Path: /v1/health
+            Method: get
+        DocsEndpoint:
+          Type: Api
+          Properties:
+            Path: /docs
+            Method: get
+        ChatbotEndpoint:
+          Type: Api
+          Properties:
+            Path: /v1/chatbot
+            Method: post
