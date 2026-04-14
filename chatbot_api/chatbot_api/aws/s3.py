@@ -2,10 +2,11 @@
 a dependency inversion for s3
 '''
 import boto3
+import os
 
 from io import BytesIO
 
-RAG_BUCKET_NAME = "rag-bucket"
+RAG_INFO_BUCKET_NAME = os.environ["RAG_INFO_BUCKET_NAME"]
 
 def get_s3_bucket(bucket_name:str):
     """
