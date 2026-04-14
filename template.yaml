@@ -4,14 +4,38 @@ Description: >
   a chatbot using Amazon Nove Micro to help urban wildlife alliance users
 
 Resources:
+
+  # LAMBDA
+  # ------
   ChatbotApiFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: chatbot_api/
-      Handler: app.lambda_handler
+      Handler: app.handler
       Runtime: python3.14
+      Timeout: 30
       Architectures:
         - x86_64
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+            Resource: 
+              - 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0'
+              - 'arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0'
+        - Statement:
+          - Effect: Allow
+            Action:
+              - s3vectors:QueryVectors
+            Resource: !GetAtt RagVectorIndex.IndexArn
+        - S3ReadPolicy:
+            BucketName: !Ref InfoBucket
+      Environment:
+        Variables:
+          S3_VECTOR_INDEX_ARN: !GetAtt RagVectorIndex.IndexArn
+          RAG_INFO_BUCKET_NAME: !Ref InfoBucket
+
       Events:
         HealthEndpoint:
           Type: Api
@@ -28,3 +52,28 @@ Resources:
           Properties:
             Path: /v1/chatbot
             Method: post
+        GetDocsJsonEndpoint:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: any
+  
+  # S3 Vector
+  # ---------
+  RagVectorBucket:
+    Type: AWS::S3Vectors::VectorBucket
+    Properties: {}
+  
+  RagVectorIndex:
+    Type: AWS::S3Vectors::Index
+    Properties:
+      VectorBucketArn: !GetAtt RagVectorBucket.VectorBucketArn
+      IndexName: "rag-vector-index"
+      DataType: "float32"
+      Dimension: 1024
+      DistanceMetric: cosine
+  
+  # S3 Bucket
+  # ---------
+  InfoBucket:
+    Type: AWS::S3::Bucket
