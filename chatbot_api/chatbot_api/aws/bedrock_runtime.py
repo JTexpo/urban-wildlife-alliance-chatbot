@@ -2,6 +2,7 @@
 a dependency inversion for bedrock runtime
 '''
 import boto3
+import json
 
 MODEL_ID = "amazon.nova-micro-v1:0"
 
@@ -38,3 +39,11 @@ def bedrock_converse(bedrock_runtime_client, conversation, tools) -> dict:
         },
         inferenceConfig={"maxTokens": 512, "temperature": 0.1, "topP": 0.9},
     )
+
+def titan_embed(bedrock, text):
+    return json.loads(bedrock.invoke_model(
+        modelId="amazon.titan-embed-text-v2:0",
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps({"inputText": text}),
+    )["body"].read())["embedding"]
