@@ -12,13 +12,15 @@
 
 ## Demo
 
-```
-User:  "I found an animal, it needs help"
-
-Bot:   "I need more details to assist you better. Could you please
-        specify what kind of help you need with the animal? For example,
-        are you looking for information on a specific species, advice on
-        care, or something else?"
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/Prod/v1/chatbot' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "message": "I found an injured bat in my yard",
+  "conversation_history": []
+}'
 ```
 
 The chatbot never answers from general internet knowledge — every response is grounded in the Urban Wildlife Alliance's approved guidance documents.
@@ -66,18 +68,20 @@ The chatbot never answers from general internet knowledge — every response is 
 
 ## Architecture
 
-```
-WordPress Site
-      ↓  HTTP POST
-Amazon API Gateway
-      ↓
-AWS Lambda (FastAPI via Mangum)
-      ↓                    ↓                      ↓
-Amazon Bedrock        S3 Vectors             Amazon S3
-Nova-Micro v1         (vector index)         (wildlife docs)
-      ↑                    ↑
-      └── Amazon Bedrock Titan Embed v2
-          (converts questions to vectors)
+```mermaid
+flowchart TD
+    wordpress([WordPress Site])
+    gateway([API Gateway])
+    lambda([AWS Lambda])
+    s3vector([S3 Vector])
+    nova([Amazon Bedrock])
+    s3bucket([S3 Bucket])
+
+    wordpress --> gateway
+    gateway --> lambda
+    lambda --> s3vector
+    lambda --> nova
+    lambda --> s3bucket
 ```
 
 The application is deployed as a single AWS SAM stack. The primary resources are:
@@ -138,10 +142,9 @@ urban-wildlife-alliance-chatbot/
 
 ## Prerequisites
 
-- [Python 3.12+](https://www.python.org/downloads/)
+- [Python 3.14](https://www.python.org/downloads/)
 - [AWS CLI](https://aws.amazon.com/cli/) configured with valid credentials
 - [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
-- [Docker](https://www.docker.com/products/docker-desktop/) — required for SAM builds
 - An AWS account with Bedrock model access approved for:
   - `amazon.nova-micro-v1:0`
   - `amazon.titan-embed-text-v2:0`
@@ -245,14 +248,16 @@ Filenames must match exactly — the vector index uses filenames as keys to retr
 **4. Redeploy:**
 
 ```bash
+sam build
 sam deploy
 ```
 
-> Re-run the ingestion script and redeploy whenever wildlife guide documents are updated.
+> Re-run the ingestion script and redeploy whenever wildlife guide documents are updated. Always run `sam build` before `sam deploy` — without it you will deploy the last passing build, not your latest changes.
 
 ### Step 3 — Subsequent Deployments
 
 ```bash
+sam build
 sam deploy
 ```
 
@@ -279,7 +284,7 @@ http://127.0.0.1:8000/Prod/docs
 sam local start-api
 ```
 
-Requires Docker. Server starts at `http://127.0.0.1:3000`.
+Server starts at `http://127.0.0.1:3000`.
 
 ---
 
