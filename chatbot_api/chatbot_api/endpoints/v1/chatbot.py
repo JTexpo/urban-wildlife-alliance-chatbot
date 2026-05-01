@@ -34,6 +34,19 @@ TOOL_CONFIG = [
                 }
             },
         }
+    },
+    {
+        "toolSpec": {
+            "name": "animal_not_found",
+            "description": " Use this tool when the user is asking for an animal that is unliekly to be in the wildlife guide. For example fish, pigeon or any non urban wildlife species.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        }
     }
 ]
 
@@ -54,6 +67,9 @@ def get_wildlife_guide(question:str) -> str:
     vector = s3_vector_query(vector_client, S3_VECTOR_INDEX_ARN, embedings)
     s3_bucket_key = vector["vectors"][0]["key"]
     return bucket_get_file(s3_bucket, s3_bucket_key).read().decode("utf-8")
+
+def animal_not_found() -> str:
+    return "We don't currently have guidance for this animal in our database. Please email us directly for assistance"
 
 router = APIRouter()
 
@@ -94,6 +110,8 @@ async def chatbot(chatbot_request: ChatbotRequest) -> ChatbotResponse:
                 result = get_wildlife_guide(
                     question=tool_inputs["question"]
                 )
+            elif tool_name == "animal_not_found":
+                result = animal_not_found()
             else:
                 result = "Tool not found"
 
