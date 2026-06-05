@@ -1,11 +1,12 @@
-'''
+"""
 a dependency inversion for s3 vectors
-'''
+"""
 
 import os
 import boto3
 
 S3_VECTOR_INDEX_ARN = os.environ["S3_VECTOR_INDEX_ARN"]
+
 
 def get_vector_client() -> boto3.client:
     """
@@ -16,7 +17,8 @@ def get_vector_client() -> boto3.client:
     """
     return boto3.client("s3vectors")
 
-def s3_vector_query(client, index_arn:str, vector:list[float])->dict:
+
+def s3_vector_query(client, index_arn: str, vector: list[float]) -> dict:
     """
     Query the S3 vector index.
 
@@ -29,7 +31,5 @@ def s3_vector_query(client, index_arn:str, vector:list[float])->dict:
     dict: The response of the query operation.
     """
     return client.query_vectors(
-        indexArn=index_arn,
-        queryVector={"float32": vector},
-        topK=1
+        indexArn=index_arn, queryVector={"float32": vector}, topK=1
     )

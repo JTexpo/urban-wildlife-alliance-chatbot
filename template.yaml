@@ -1,79 +1,188 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+
 Description: >
-  a chatbot using Amazon Nove Micro to help urban wildlife alliance users
+  a chatbot using Amazon Nova Micro to help urban wildlife alliance users
 
 Resources:
+
+  # ------------------------------------------------------------------------------
+  #                                     BACKEND
+  # ------------------------------------------------------------------------------
+
+  # Secrets Manager
+  # ---------------
+  ApiAuthSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: chatbot-api-auth-secret
+
+  # API Gateway
+  # -----------
+  ChatbotApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          ChatbotAuthorizer:
+            FunctionArn: !GetAtt ChatbotAuthFunction.Arn
+            Identity:
+              Headers:
+                - Authorization
+              ReauthorizeEvery: 0
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+  
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref ChatbotApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref ChatbotApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
 
   # LAMBDA
   # ------
   ChatbotApiFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: chatbot_api/
       Handler: app.handler
       Runtime: python3.14
       Timeout: 30
-      Architectures:
-        - x86_64
+
       Policies:
         - Statement:
-          - Effect: Allow
-            Action:
-              - bedrock:InvokeModel
-            Resource: 
-              - 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0'
-              - 'arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0'
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0
+                - arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0
+
         - Statement:
-          - Effect: Allow
-            Action:
-              - s3vectors:QueryVectors
-            Resource: !GetAtt RagVectorIndex.IndexArn
+            - Effect: Allow
+              Action:
+                - s3vectors:QueryVectors
+              Resource: !GetAtt RagVectorIndex.IndexArn
+
         - S3ReadPolicy:
             BucketName: !Ref InfoBucket
+
       Environment:
         Variables:
           S3_VECTOR_INDEX_ARN: !GetAtt RagVectorIndex.IndexArn
           RAG_INFO_BUCKET_NAME: !Ref InfoBucket
 
       Events:
+        # Public endpoint
         HealthEndpoint:
           Type: Api
           Properties:
+            RestApiId: !Ref ChatbotApi
             Path: /v1/health
             Method: get
-        DocsEndpoint:
+
+        # Protected endpoint
+        HealthAuthEndpoint:
           Type: Api
           Properties:
-            Path: /docs
+            RestApiId: !Ref ChatbotApi
+            Path: /v1/health/auth
             Method: get
+            Auth:
+              Authorizer: ChatbotAuthorizer
+
+        # Protected endpoint
         ChatbotEndpoint:
           Type: Api
           Properties:
+            RestApiId: !Ref ChatbotApi
             Path: /v1/chatbot
             Method: post
-        GetDocsJsonEndpoint:
-          Type: Api
-          Properties:
-            Path: /{proxy+}
-            Method: any
-  
+            Auth:
+              Authorizer: ChatbotAuthorizer
+
+  ChatbotAuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: chatbot_auth/
+      Handler: app.handler
+      Runtime: python3.14
+      Timeout: 30
+
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref ApiAuthSecret
+
+      Environment:
+        Variables:
+          AUTH_SECRET_ARN: !Ref ApiAuthSecret
+          SECRET_NAME: chatbot-api-auth-secret
+
   # S3 Vector
   # ---------
   RagVectorBucket:
     Type: AWS::S3Vectors::VectorBucket
     Properties: {}
-  
+
   RagVectorIndex:
     Type: AWS::S3Vectors::Index
     Properties:
       VectorBucketArn: !GetAtt RagVectorBucket.VectorBucketArn
-      IndexName: "rag-vector-index"
-      DataType: "float32"
+      IndexName: rag-vector-index
+      DataType: float32
       Dimension: 1024
       DistanceMetric: cosine
-  
+
   # S3 Bucket
   # ---------
   InfoBucket:
     Type: AWS::S3::Bucket
+
+  # ------------------------------------------------------------------------------
+  #                                     FRONTEND
+  # ------------------------------------------------------------------------------
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+            Resource: !Sub "${WebsiteBucket.Arn}/*"

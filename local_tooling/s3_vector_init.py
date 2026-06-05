@@ -51,12 +51,14 @@ def get_bedrock_runtime_client() -> boto3.client:
 
 
 def titan_embed(bedrock, text):
-    return json.loads(bedrock.invoke_model(
-        modelId="amazon.titan-embed-text-v2:0",
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({"inputText": text}),
-    )["body"].read())["embedding"]
+    return json.loads(
+        bedrock.invoke_model(
+            modelId="amazon.titan-embed-text-v2:0",
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({"inputText": text}),
+        )["body"].read()
+    )["embedding"]
 
 
 """
@@ -87,6 +89,7 @@ def main():
                     vector,
                     {},
                 )
+
 
 if __name__ == "__main__":
     main()

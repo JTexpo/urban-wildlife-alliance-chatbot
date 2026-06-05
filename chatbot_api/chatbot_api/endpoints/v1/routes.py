@@ -1,6 +1,7 @@
-'''
+"""
 A router for all v1 endpoints
-'''
+"""
+
 from fastapi import APIRouter
 
 from chatbot_api.endpoints.v1 import health, chatbot
